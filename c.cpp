@@ -6,15 +6,24 @@
 #include <string.h>
 #include <filesystem>
 
+void error_handler(std::string str, int errNum)
+{
+    /// This function prints an Error message and exits the program
+    fflush(stderr);
+    fflush(stdout);
+    fprintf(stderr,"%s",str.c_str());
+    exit(errNum);
+}
 
-int argument_parser(int argc, char** argv, char *ipaddress, char *rfile)
+int argument_parser(int argc, char** argv, std::string *ipaddress, std::string *rfile)
 {
     int opt;
     bool isserver = false;
     bool isrFile = false;
     bool isIpaddress = false;
 
-    while((opt = getopt(argc,argv,"-r:-i:-I")) != -1)
+    /// checks for arguments
+    while ((opt = getopt(argc, argv, "-r:-i:-I")) != -1)
     {
         switch (opt)
         {
@@ -23,28 +32,30 @@ int argument_parser(int argc, char** argv, char *ipaddress, char *rfile)
              call help;
              break;
              * */
+            /// assignes values of -r delimiter
             case 'r':
-                strcpy(rfile, optarg);
+                //strcpy(rfile, optarg);
+                rfile->assign(optarg,sizeof(optarg));
                 isrFile = true;
                 break;
+            /// assignes value of -i delimiter
             case 'i':
-                strcpy(ipaddress, optarg);
+                //strcpy(ipaddress, optarg);
+                ipaddress->assign(optarg,sizeof (optarg));
                 isIpaddress = true;
                 break;
+            /// checks for server or client delimiter
             case 'I':
                 isserver = true;
                 break;
             default:
-                printf("Wrong arguments");
-                exit(1);
+                error_handler("Wrong arguments",2);
                 break;
         }
-        printf("Isserver: %d\n",isserver);
     }
-    printf("Isserver: %d\n",isserver);
     if (isserver)
         return 1;
-    if(isrFile && isIpaddress)
+    if (isrFile && isIpaddress)
         return 0;
     return -1;
 }
@@ -52,15 +63,13 @@ int argument_parser(int argc, char** argv, char *ipaddress, char *rfile)
 
 int main (int argc, char *argv[])
 {
-    char *ipaddress = (char*)malloc(50*sizeof(char));
-    char *rfile = (char*)malloc(50*sizeof(char));
+    std::string rfile;
+    std::string ipaddress;
 
-    int isserver = argument_parser(argc,argv,ipaddress,rfile);
+    int isserver = argument_parser(argc,argv,&ipaddress,&rfile);
     if(isserver == -1)
     {
-        printf("Some arguments are missing\n");
-        free(ipaddress);
-        free(rfile);
+        error_handler("Missing Arguments",3);
     }
     if(isserver == 1)
     {

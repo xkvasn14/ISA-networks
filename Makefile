@@ -1,5 +1,6 @@
 CC = g++
-CFLAGS = -Wall -Werror
+CFLAGS = -Wall -Werror -Wextra -pedantic
+LDFLAGS = -lssl -lcrypto -lpcap
 TARGET = secret
 OBJ = c.o
 LOGIN = xkvasn14
@@ -8,6 +9,6 @@ LOGIN = xkvasn14
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 	rm -f *.o
 

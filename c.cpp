@@ -11,12 +11,12 @@
 #include <openssl/aes.h>
 #include <sys/socket.h>
 #include <cerrno>
+#include <pcap/pcap.h>
 
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <pcap.h>
-#include <pcap/pcap.h>
 #include <errno.h>
 #include <sys/socket.h>
 #define __FAVOR_BSD          // important for tcphdr structure
@@ -41,8 +41,11 @@
 #define SIZE_ETHERNET (14)       // offset of Ethernet header to L3 protocol
 
 int n = 0;
-
-
+struct mystruct {
+    char key1;
+    char key2;
+    char key3;
+};
 
 
 void error_handler(std::string str, int errNum)
@@ -99,6 +102,11 @@ int argument_parser(int argc, char** argv, std::string *ipaddress, std::string *
     return -1;
 }
 
+void write_to_file()
+{
+
+}
+
 void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
 {
     struct ip *my_ip;               // pointer to the beginning of IP header
@@ -108,8 +116,54 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
     u_int size_ip;
 
     n++;
+
+    /// Only my icmp packet filter
+    if(!(packet[34] == 'E' && packet[35] == 'E' && packet[36] == 'E'))
+        return;
+
+
+
+
+    int count = 0;
+    //unsigned char data[10];
+    int datalen = 10;
+    unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
+
+
+
+    memcpy(data, packet + 45, datalen + (AES_BLOCK_SIZE % datalen));
+    /*
+    printf("\nRead Data: ");
+    for (int i = 45; i < header->len; ++i)
+	{
+		printf("%c ", packet[i]);
+        data[count] = packet[i];
+        count++;
+	}*/
+
+    printf("\nData: %s\n",data);
+    printf("Showed encrypted data to decrypt: ");
+    for (int i = 0; i < datalen; ++i)
+    {
+        printf("%X ", data[i]);
+    }
+    printf("\n");
+    AES_KEY key_d;
+    AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
+    unsigned char output[datalen];
+    AES_decrypt(data, data, &key_d);
+    fflush(stdout);
+    printf("decrypted: %s\n", (char*)data);
+
+
+
+
+
+
+
+    printf("\n");
     // print the packet header data
-    printf("Packet no. %d:\n",n);
+    printf("\tPacket no. %d:\n",n);
     printf("\tLength %d, received at %s",header->len,ctime((const time_t*)&header->ts.tv_sec));
     //    printf("Ethernet address length is %d\n",ETHER_HDR_LEN);
 
@@ -184,7 +238,8 @@ int client_branch()
     struct addrinfo hints, *serverinfo;
     memset(&hints, 0, sizeof(hints));
 
-    char *host = (char*)("google.sk");
+    //char *host = (char*)("google.sk");
+    char *host = (char*)("147.229.192.125");
     int result;
 
     //hints.ai_family = AF_UNSPEC;
@@ -217,8 +272,25 @@ int client_branch()
 
 
 	char packet[1500];
-	char data[] = "Monntegea";
+	const unsigned char dataIn[] = "XKVASN14";
 	int datalen = 10;
+
+    // data = read_file();
+
+    AES_KEY key_encr;
+    AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_encr);
+    //AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_e);
+    unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
+    AES_encrypt(dataIn, data, &key_encr);
+    //AES_encrypt(dataIn, data, &key_e);
+    printf("Read Encrypted Data: ");
+    for (int i = 0; i < datalen; ++i)
+    {
+        printf("%X ", data[i]);
+    }
+    printf("\n");
+
+
 
 	memset(&packet, 0, 1500);
 
@@ -227,11 +299,22 @@ int client_branch()
 	icmp_header->checksum = 0;
 	//vypočitaj si checksum ak chceš :)
 
-	memcpy(packet + sizeof(struct icmphdr), data, datalen);
+
+
+
+    struct mystruct *dah = (struct mystruct *) packet;
+    dah->key1 = 69;
+    dah->key2 = 69;
+    dah->key3 = 69;
+
+    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct mystruct), data, datalen);
+
+
+	//memcpy(packet + sizeof(struct icmphdr), data, datalen);
 
 	// MAXDATALEN = MTU(1500B) - zvyšna velkost čo si spotreboval :)
 
-	if (sendto(sock, packet, sizeof(struct icmphdr) + datalen, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
+	if (sendto(sock, packet, sizeof(struct icmphdr) + sizeof(struct mystruct) + datalen, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
 	{
         printf("errno: %s\n",strerror(errno));
 		fprintf(stderr, "sendto err :)\n");
@@ -239,8 +322,8 @@ int client_branch()
 	}
 
 	// //šifrovanie
-
-	const unsigned char cyphertext[] = "Monntegea";
+/*
+	const unsigned char cyphertext[] = "XKVASN14";
 	int cyphertextlen = 10;
 
 	AES_KEY key_e;
@@ -262,7 +345,11 @@ int client_branch()
 	AES_decrypt(output, output, &key_d);
 
 	printf("decrypted: %s\n", output);
-
+*/
+    AES_KEY key_d;
+    AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
+    AES_decrypt(data, data, &key_d);
+    printf("decrypted: %s\n", data);
     return 0;
 }
 
@@ -332,6 +419,9 @@ int main (int argc, char *argv[])
 {
     std::string rfile;
     std::string ipaddress;
+
+
+    // Is_file(rfile);
 
     int isserver = argument_parser(argc,argv,&ipaddress,&rfile);
     if(isserver == -1)

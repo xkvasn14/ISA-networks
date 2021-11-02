@@ -123,15 +123,15 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
 
 
 
-
     int count = 0;
     //unsigned char data[10];
-    int datalen = 10;
+    int datalen = 16;
     unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
+    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
 
 
+    memcpy(data, packet + 45, (datalen + (AES_BLOCK_SIZE % datalen)));
 
-    memcpy(data, packet + 45, datalen + (AES_BLOCK_SIZE % datalen));
     /*
     printf("\nRead Data: ");
     for (int i = 45; i < header->len; ++i)
@@ -143,14 +143,14 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
 
     printf("\nData: %s\n",data);
     printf("Showed encrypted data to decrypt: ");
-    for (int i = 0; i < datalen; ++i)
+    for (int i = 0; i < (datalen + (AES_BLOCK_SIZE % datalen)); ++i)
     {
         printf("%X ", data[i]);
     }
     printf("\n");
     AES_KEY key_d;
     AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
-    unsigned char output[datalen];
+    //unsigned char output[datalen];
     AES_decrypt(data, data, &key_d);
     fflush(stdout);
     printf("decrypted: %s\n", (char*)data);
@@ -271,9 +271,10 @@ int client_branch()
     }
 
 
-	char packet[1500];
-	const unsigned char dataIn[] = "XKVASN14";
-	int datalen = 10;
+
+
+	const unsigned char dataIn[] = "XKVASN14 156";
+	int datalen = 16;
 
     // data = read_file();
 
@@ -281,10 +282,11 @@ int client_branch()
     AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_encr);
     //AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_e);
     unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
+    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
     AES_encrypt(dataIn, data, &key_encr);
     //AES_encrypt(dataIn, data, &key_e);
     printf("Read Encrypted Data: ");
-    for (int i = 0; i < datalen; ++i)
+    for (int i = 0; i < AES_BLOCK_SIZE; ++i)
     {
         printf("%X ", data[i]);
     }
@@ -292,6 +294,7 @@ int client_branch()
 
 
 
+    char packet[1500];
 	memset(&packet, 0, 1500);
 
 	struct icmphdr *icmp_header = (struct icmphdr *)packet;
@@ -299,15 +302,12 @@ int client_branch()
 	icmp_header->checksum = 0;
 	//vypočitaj si checksum ak chceš :)
 
-
-
-
     struct mystruct *dah = (struct mystruct *) packet;
     dah->key1 = 69;
     dah->key2 = 69;
     dah->key3 = 69;
 
-    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct mystruct), data, datalen);
+    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct mystruct), data, (datalen + (AES_BLOCK_SIZE % datalen)));
 
 
 	//memcpy(packet + sizeof(struct icmphdr), data, datalen);

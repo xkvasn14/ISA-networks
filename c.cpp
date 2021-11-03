@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <pcap.h>
 #include <iostream>
-#include <filesystem>
 #include <netdb.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -41,10 +40,16 @@
 #define SIZE_ETHERNET (14)       // offset of Ethernet header to L3 protocol
 
 int n = 0;
-struct mystruct {
+struct keys {
     char key1;
     char key2;
     char key3;
+    char name[48];
+};
+
+struct filenameStruct
+{
+    char *filename;
 };
 
 
@@ -65,7 +70,7 @@ int argument_parser(int argc, char** argv, std::string *ipaddress, std::string *
     bool isIpaddress = false;
 
     /// checks for arguments
-    while ((opt = getopt(argc, argv, "-r:-i:-I")) != -1)
+    while ((opt = getopt(argc, argv, "-r:-s:-I")) != -1)
     {
         switch (opt)
         {
@@ -77,13 +82,15 @@ int argument_parser(int argc, char** argv, std::string *ipaddress, std::string *
             /// assignes values of -r delimiter
             case 'r':
                 //strcpy(rfile, optarg);
-                rfile->assign(optarg,sizeof(optarg));
+                //rfile->assign(optarg,sizeof(optarg));
+                rfile->append(optarg);
                 isrFile = true;
                 break;
             /// assignes value of -i delimiter
-            case 'i':
+            case 's':
                 //strcpy(ipaddress, optarg);
-                ipaddress->assign(optarg,sizeof (optarg));
+                //ipaddress->assign(optarg,sizeof(optarg));
+                ipaddress->append(optarg);
                 isIpaddress = true;
                 break;
             /// checks for server or client delimiter
@@ -102,6 +109,24 @@ int argument_parser(int argc, char** argv, std::string *ipaddress, std::string *
     return -1;
 }
 
+void is_file (std::string& name) {
+    if (FILE *file = fopen(name.c_str(), "r"))
+        fclose(file);
+     else
+        error_handler("File does not exist", -1);
+}
+/*
+char* get_file_name(std::string& rfile)
+{
+    int i = rfile.rfind('/',rfile.length());
+    if(i != string::'\\'){
+        return(rfile.substr(i+1,rfile.length()) - i);
+    }
+    return('\0');
+
+}*/
+
+
 void write_to_file()
 {
 
@@ -117,20 +142,26 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
 
     n++;
 
-    /// Only my icmp packet filter
+    // Only my icmp packet filter
     if(!(packet[34] == 'E' && packet[35] == 'E' && packet[36] == 'E'))
         return;
 
-
+    // TODO solve problem with reading the name of the file & same with the data... and solve the datalen... cause its weird.. header->len ???
+    printf("PATH: ");
+    for (int i = 42; i < 57; ++i)
+    {
+        printf("%c ",packet[i]);
+    }
+    printf("\n");
 
     int count = 0;
     //unsigned char data[10];
-    int datalen = 16;
+    int datalen = 16; // lengths can be only 16, 32, 48, 64 .... 128 B. its because the cryptography, anything smaller will get wider up to 16B
     unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
     //unsigned char *data = (unsigned char *)calloc(datalen, 2);
 
 
-    memcpy(data, packet + 45, (datalen + (AES_BLOCK_SIZE % datalen)));
+    memcpy(data, packet + 58, (datalen + (AES_BLOCK_SIZE % datalen)));
 
     /*
     printf("\nRead Data: ");
@@ -160,7 +191,7 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
 
 
 
-
+    /*
     printf("\n");
     // print the packet header data
     printf("\tPacket no. %d:\n",n);
@@ -220,7 +251,7 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
             break;
         default:
             printf("\tEthernet type 0x%x, not IPv4\n", ntohs(eptr->ether_type));
-    }
+    }*/
 }
 
 void *get_in_addr(struct sockaddr *sa)
@@ -233,17 +264,18 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6 *)sa)->sin6_addr);
 }
 
-int client_branch()
+int client_branch(std::string ipaddress, std::string rfile)
 {
     struct addrinfo hints, *serverinfo;
     memset(&hints, 0, sizeof(hints));
 
     //char *host = (char*)("google.sk");
-    char *host = (char*)("147.229.192.125");
+    //char *host = (char*)("147.229.192.125");
+    char *host = (char*)ipaddress.c_str();
     int result;
 
-    //hints.ai_family = AF_UNSPEC;
-    hints.ai_family = AF_INET;
+    hints.ai_family = AF_UNSPEC;
+    //hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_RAW;
 
     if ((result = getaddrinfo(host, NULL, &hints, &serverinfo)) != 0)
@@ -273,8 +305,14 @@ int client_branch()
 
 
 
-	const unsigned char dataIn[] = "XKVASN14 156";
+
+
+    FILE *file = fopen(rfile.c_str(), "r");
+    //const unsigned char dataIn[] = "XKVASN14 156";
+    unsigned char dataIn[1000];
+    fread(dataIn,1,1000,file);
 	int datalen = 16;
+
 
     // data = read_file();
 
@@ -302,19 +340,36 @@ int client_branch()
 	icmp_header->checksum = 0;
 	//vypočitaj si checksum ak chceš :)
 
-    struct mystruct *dah = (struct mystruct *) packet;
+
+    printf("%s\n", basename(rfile.c_str()));
+    //unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
+    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
+    //AES_encrypt(dataIn, data, &key_encr);
+
+    //GET NAME OF THE FILE - noncrypted
+    struct keys *dah = (struct keys *) packet;
     dah->key1 = 69;
     dah->key2 = 69;
     dah->key3 = 69;
+    memcpy(dah->name, basename(rfile.c_str()),rfile.length());
+    //dah->name = (char*) basename(rfile.c_str());
+    //GET NAME OF THE FILE
 
-    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct mystruct), data, (datalen + (AES_BLOCK_SIZE % datalen)));
+
+
+    /*struct filenameStruct *filenames = (struct filenameStruct *) packet;
+    const char* filename;
+    filename = basename(rfile.c_str());
+    filenames->filename = (char*)filename;*/
+
+    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct keys), data, (datalen + (AES_BLOCK_SIZE % datalen)));// + sizeof(struct filenameStruct)
 
 
 	//memcpy(packet + sizeof(struct icmphdr), data, datalen);
 
 	// MAXDATALEN = MTU(1500B) - zvyšna velkost čo si spotreboval :)
 
-	if (sendto(sock, packet, sizeof(struct icmphdr) + sizeof(struct mystruct) + datalen, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
+	if (sendto(sock, packet, sizeof(struct icmphdr) + sizeof(struct keys) + datalen, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
 	{
         printf("errno: %s\n",strerror(errno));
 		fprintf(stderr, "sendto err :)\n");
@@ -420,10 +475,8 @@ int main (int argc, char *argv[])
     std::string rfile;
     std::string ipaddress;
 
-
-    // Is_file(rfile);
-
     int isserver = argument_parser(argc,argv,&ipaddress,&rfile);
+
     if(isserver == -1)
     {
         error_handler("Missing Arguments\n",3);
@@ -436,7 +489,8 @@ int main (int argc, char *argv[])
     else
     {
         // CALL CLIENT BRANCH
-        client_branch();
+        is_file(rfile);
+        client_branch(ipaddress,rfile);
     }
     return 0;
 }

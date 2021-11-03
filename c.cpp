@@ -126,10 +126,30 @@ char* get_file_name(std::string& rfile)
 
 }*/
 
-
-void write_to_file()
+// https://www.techiedelight.com/implement-substr-function-c/
+// Following function extracts characters present in `src`
+// between `m` and `n` (excluding `n`)
+char* substr(const char *src, int m, int n)
 {
+    // get the length of the destination string
+    int len = n - m;
 
+    // allocate (len + 1) chars for destination (+1 for extra null character)
+    char *dest = (char*)malloc(sizeof(char) * (len + 1));
+
+    // extracts characters between m'th and n'th index from source string
+    // and copy them into the destination string
+    for (int i = m; i < n && (*(src + i) != '\0'); i++)
+    {
+        *dest = *(src + i);
+        dest++;
+    }
+
+    // null-terminate the destination string
+    *dest = '\0';
+
+    // return the destination string
+    return dest - len;
 }
 
 void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char *packet)
@@ -139,57 +159,111 @@ void mypcap_handler(u_char *args, const struct pcap_pkthdr *header, const u_char
     const struct tcphdr *my_tcp;    // pointer to the beginning of TCP header
     const struct udphdr *my_udp;    // pointer to the beginning of UDP header
     u_int size_ip;
-
     n++;
+    AES_KEY key_d;
+    AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
 
     // Only my icmp packet filter
     if(!(packet[34] == 'E' && packet[35] == 'E' && packet[36] == 'E'))
         return;
 
-    // TODO solve problem with reading the name of the file & same with the data... and solve the datalen... cause its weird.. header->len ???
-    printf("PATH: ");
-    for (int i = 42; i < 57; ++i)
-    {
-        printf("%c ",packet[i]);
-    }
-    printf("\n");
-
-    int count = 0;
-    //unsigned char data[10];
-    int datalen = 16; // lengths can be only 16, 32, 48, 64 .... 128 B. its because the cryptography, anything smaller will get wider up to 16B
-    unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
-    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
-
-
-    memcpy(data, packet + 58, (datalen + (AES_BLOCK_SIZE % datalen)));
-
     /*
-    printf("\nRead Data: ");
-    for (int i = 45; i < header->len; ++i)
-	{
-		printf("%c ", packet[i]);
-        data[count] = packet[i];
-        count++;
-	}*/
-
-    printf("\nData: %s\n",data);
-    printf("Showed encrypted data to decrypt: ");
-    for (int i = 0; i < (datalen + (AES_BLOCK_SIZE % datalen)); ++i)
+     * printf("FILENAME encrypted: ");
+    for (int i = 37; i < 92; ++i)
     {
-        printf("%X ", data[i]);
+        printf("%X ",packet[i]);
     }
     printf("\n");
-    AES_KEY key_d;
-    AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
-    //unsigned char output[datalen];
-    AES_decrypt(data, data, &key_d);
+    for (int i = 37; i < 37+16; ++i)
+    {
+        printf("%X ",packet[i]);
+    }
+    printf("\n");
+    for (int i = 37+16; i < 37+16+16; ++i)
+    {
+        printf("%X ",packet[i]);
+    }
+    printf("\n");
+    for (int i = 37+16+16; i < 37+16+16+16; ++i)
+    {
+        printf("%X ",packet[i]);
+    }
+    printf("\n");
+     */
+
+
+
+    unsigned char *filecopyname = (unsigned char *) calloc(16,1);
+    unsigned char *filetocopyname = (unsigned char *) calloc(16,1);
+    unsigned char*rfile = (unsigned char*) calloc(48,1);
+
+    memcpy(filecopyname, packet + 37, 16);
+
+    for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+    {
+        printf("%X ",filecopyname[i]);
+    }
+    printf("\n");
+
+    AES_decrypt((const unsigned char*)filecopyname, filetocopyname, &key_d);
+    printf("%s\n", filetocopyname);
+    memcpy(rfile,filetocopyname,16);
+
+    if((int)packet[37+16] != 0)
+    {
+        memcpy(filecopyname, packet + 37 + 16, 16);
+        AES_decrypt((const unsigned char *) filecopyname, filetocopyname, &key_d);
+        printf("%s\n", filetocopyname);
+        memcpy(rfile+16,filetocopyname,16);
+    }
+    if((int)packet[37+16+16] != 0)
+    {
+        memcpy(filecopyname, packet + 37+16+16, 16);
+        AES_decrypt((const unsigned char*)filecopyname,filetocopyname, &key_d);
+        printf("%s\n", filetocopyname);
+        memcpy(rfile+32,filetocopyname,16);
+    }
+
+    printf("filename: %s\n",rfile);
+    free(filecopyname);
+    free(filetocopyname);
+
+
+
+
+
+   unsigned char* data = (unsigned char *)calloc(header->len - 93, 1);
+   unsigned char* datatocopy = (unsigned char *) calloc(16,1);
+
+
+    memcpy(data, packet + 93, header->len - 93);
+    int i = 0;
+
+    FILE *file = fopen((const char*)rfile,"a");
+    while(i < header->len - 93)
+    {
+        memcpy(datatocopy,data + i, 16);
+        AES_decrypt(datatocopy, datatocopy, &key_d);
+        //write into file by 16 chars...
+        fputs((const char*)datatocopy,file);
+        printf("decrypted data: %s\n",datatocopy);
+        i += 16;
+        for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+        {
+            printf("%X ",datatocopy[i]);
+        }
+    }
+    fclose(file);
+
+
+
     fflush(stdout);
-    printf("decrypted: %s\n", (char*)data);
+    printf("%d\n",header->len);
 
-
-
-
-
+    free(data);
+    free(rfile);
+    free(datatocopy);
+    // write_into_file(rfile,decryptedData);
 
     /*
     printf("\n");
@@ -266,6 +340,9 @@ void *get_in_addr(struct sockaddr *sa)
 
 int client_branch(std::string ipaddress, std::string rfile)
 {
+    AES_KEY key_encr;
+    AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_encr);
+
     struct addrinfo hints, *serverinfo;
     memset(&hints, 0, sizeof(hints));
 
@@ -307,30 +384,13 @@ int client_branch(std::string ipaddress, std::string rfile)
 
 
 
+
+    // DATA ENCRYPTION
     FILE *file = fopen(rfile.c_str(), "r");
-    //const unsigned char dataIn[] = "XKVASN14 156";
-    unsigned char dataIn[1000];
-    fread(dataIn,1,1000,file);
-	int datalen = 16;
+    unsigned char dataIn[1000]; // max memAlocSize will be [1008]
 
-
-    // data = read_file();
-
-    AES_KEY key_encr;
-    AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_encr);
-    //AES_set_encrypt_key((const unsigned char *)"xlogin00", 128, &key_e);
-    unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
-    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
-    AES_encrypt(dataIn, data, &key_encr);
-    //AES_encrypt(dataIn, data, &key_e);
-    printf("Read Encrypted Data: ");
-    for (int i = 0; i < AES_BLOCK_SIZE; ++i)
+    while(fread(dataIn,1,1000,file))
     {
-        printf("%X ", data[i]);
-    }
-    printf("\n");
-
-
 
     char packet[1500];
 	memset(&packet, 0, 1500);
@@ -341,40 +401,133 @@ int client_branch(std::string ipaddress, std::string rfile)
 	//vypočitaj si checksum ak chceš :)
 
 
+    // FILENAME ENCRYPTION
     printf("%s\n", basename(rfile.c_str()));
-    //unsigned char *data = (unsigned char *)calloc(datalen + (AES_BLOCK_SIZE % datalen), 1);
-    //unsigned char *data = (unsigned char *)calloc(datalen, 2);
-    //AES_encrypt(dataIn, data, &key_encr);
+    printf("filenamesize %ld\n", strlen(basename(rfile.c_str())));
+    unsigned char *dataFile = (unsigned char *)calloc(48 + (AES_BLOCK_SIZE % 48), 1);
+    if(strlen(basename(rfile.c_str())) <= 16)
+    {
+        AES_encrypt((const unsigned char*)basename(rfile.c_str()), dataFile, &key_encr);
+    }
+    else
+    {
+        if(strlen(basename(rfile.c_str())) <= 32)
+        {
+            unsigned char *fname = (unsigned char *) calloc(16,1);
+            unsigned char *fcopyname = (unsigned char *) calloc(32,1);
 
-    //GET NAME OF THE FILE - noncrypted
+            AES_encrypt((const unsigned char*) substr(basename(rfile.c_str()),0,16),(unsigned char*)fname,&key_encr);
+            memcpy(fcopyname ,fname,16);
+            AES_encrypt((const unsigned char*) substr(basename(rfile.c_str()),16, strlen(basename(rfile.c_str()))),(unsigned char*)fname,&key_encr);
+            memcpy(fcopyname + 16,fname,16);
+            memcpy(dataFile,fcopyname,32);
+
+            free(fname);
+            free(fcopyname);
+        }
+        else
+        {
+            if(strlen(basename(rfile.c_str())) <= 48)
+            {
+                unsigned char *fname = (unsigned char *) calloc(16,1);
+                unsigned char *fcopyname = (unsigned char *) calloc(32,1);
+
+                AES_encrypt((const unsigned char*) substr(basename(rfile.c_str()),0,16),(unsigned char*)fname,&key_encr);
+                memcpy(fcopyname ,fname,16);
+                AES_encrypt((const unsigned char*) substr(basename(rfile.c_str()),16, 32),(unsigned char*)fname,&key_encr);
+                memcpy(fcopyname + 16,fname,16);
+                AES_encrypt((const unsigned char*) substr(basename(rfile.c_str()),32, strlen(basename(rfile.c_str()))),(unsigned char*)fname,&key_encr);
+                memcpy(fcopyname + 32,fname,16);
+                memcpy(dataFile,fcopyname,48);
+
+                free(fname);
+                free(fcopyname);
+            }
+            else
+                error_handler("Name of file is too long",-1);
+        }
+    }
+
+
+
+    printf("Read Encrypted File: ");
+    for (int i = 0; i < AES_BLOCK_SIZE*3; ++i)
+    {
+        printf("%X ", dataFile[i]);
+    }
+    printf("\n");
+    //GET NAME OF THE FILE
     struct keys *dah = (struct keys *) packet;
     dah->key1 = 69;
     dah->key2 = 69;
     dah->key3 = 69;
-    memcpy(dah->name, basename(rfile.c_str()),rfile.length());
-    //dah->name = (char*) basename(rfile.c_str());
-    //GET NAME OF THE FILE
+    memcpy(dah->name, dataFile,48);
 
 
 
-    /*struct filenameStruct *filenames = (struct filenameStruct *) packet;
-    const char* filename;
-    filename = basename(rfile.c_str());
-    filenames->filename = (char*)filename;*/
-
-    memcpy(packet + sizeof(struct icmphdr) + sizeof(struct keys), data, (datalen + (AES_BLOCK_SIZE % datalen)));// + sizeof(struct filenameStruct)
 
 
-	//memcpy(packet + sizeof(struct icmphdr), data, datalen);
 
-	// MAXDATALEN = MTU(1500B) - zvyšna velkost čo si spotreboval :)
+        int memAlocSize = 0;
+        int datalen = strlen((char *) dataIn);
+        // GETTING memory size for excryption process
+        while (datalen > memAlocSize)
+            memAlocSize += 16;
 
-	if (sendto(sock, packet, sizeof(struct icmphdr) + sizeof(struct keys) + datalen, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
-	{
-        printf("errno: %s\n",strerror(errno));
-		fprintf(stderr, "sendto err :)\n");
-		return 1;
-	}
+
+        unsigned char *data = (unsigned char *) calloc(memAlocSize, 1);
+        //unsigned char datatocopy = (unsigned char *) calloc(16,1);
+        int i = 0;
+        while(i < memAlocSize)
+        {
+            unsigned char *encrypteddata = (unsigned char*) calloc(16,1);
+            if(i == (memAlocSize - 16))
+            {
+                unsigned char *datatocopy = (unsigned char *) substr((const char *) dataIn, i, datalen);
+                AES_encrypt(datatocopy, encrypteddata, &key_encr);
+                memcpy(data + i, encrypteddata, 16);
+                i += 16;
+            }
+            else
+            {
+                unsigned char *datatocopy = (unsigned char *) substr((const char *) dataIn, i, i + 16);
+                AES_encrypt(datatocopy, encrypteddata, &key_encr);
+                memcpy(data + i, encrypteddata, 16);
+                i += 16;
+            }
+            AES_KEY key_d;
+            AES_set_decrypt_key((const unsigned char *) "xlogin00", 128, &key_d);
+            AES_decrypt(encrypteddata, encrypteddata, &key_d);
+            printf("decrypted: %s\n", encrypteddata);
+            free(encrypteddata);
+        }
+
+
+        printf("Read Encrypted Data: ");
+        for (int i = 0; i < memAlocSize; ++i)
+        {
+            printf("%X ", data[i]);
+        }
+        printf("\n");
+
+
+        // HEADER AND DATA TO PACKET
+        memcpy(packet + sizeof(struct icmphdr) + sizeof(struct keys), data, memAlocSize);
+
+
+        // PACKET SENDING
+	    if (sendto(sock, packet, sizeof(struct icmphdr) + sizeof(struct keys) + memAlocSize, 0, (struct sockaddr *)(serverinfo->ai_addr), serverinfo->ai_addrlen) < 0)
+        {
+            printf("errno: %s\n", strerror(errno));
+            fprintf(stderr, "sendto err :)\n");
+            return 1;
+        }
+
+
+
+
+        free(data);
+    }
 
 	// //šifrovanie
 /*
@@ -400,11 +553,13 @@ int client_branch(std::string ipaddress, std::string rfile)
 	AES_decrypt(output, output, &key_d);
 
 	printf("decrypted: %s\n", output);
-*/
+
     AES_KEY key_d;
     AES_set_decrypt_key((const unsigned char *)"xlogin00", 128, &key_d);
     AES_decrypt(data, data, &key_d);
     printf("decrypted: %s\n", data);
+    //free(data);
+*/
     return 0;
 }
 
